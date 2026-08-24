@@ -601,13 +601,12 @@
       const row = document.createElement('a');
       row.className = 'chat-timeline-row';
       row.href = rec.href || `/c/${rec.id}`;
-      if (S.settings.openInBackground) {
-        row.addEventListener('click', event => {
-          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-          event.preventDefault();
-          chrome.runtime.sendMessage({ action: 'openInBackground', url: row.href });
-        });
-      }
+      row.addEventListener('click', event => {
+        if (!S.settings.openInBackground) return;
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        chrome.runtime.sendMessage({ action: 'openInBackground', url: row.href });
+      });
 
       const date = document.createElement('span');
       date.className = 'chat-timeline-row-date';
@@ -825,20 +824,6 @@
         <strong>聊天目录</strong>
         <span class="chat-timeline-panel-status">正在读取本地目录…</span>
       </div>
-      <div class="chat-timeline-panel-controls">
-        <label class="chat-timeline-newtab-toggle">
-          <input type="checkbox" class="chat-timeline-newtab" ${S.settings.openInBackground ? 'checked' : ''}>
-          <span>新标签页打开</span>
-        </label>
-        <label class="chat-timeline-sidebar-toggle">
-          <input type="checkbox" class="chat-timeline-sidebar-time" ${S.settings.showSidebarTime ? 'checked' : ''}>
-          <span>原生侧栏时间</span>
-        </label>
-        <label class="chat-timeline-message-toggle">
-          <input type="checkbox" class="chat-timeline-message-time" ${S.settings.showMessageTimestamps ? 'checked' : ''}>
-          <span>消息时间戳</span>
-        </label>
-      </div>
       <div class="chat-timeline-panel-list">
         <div class="chat-timeline-columns">
           <button type="button" class="chat-timeline-created-sort" aria-label="按创建时间排序" aria-sort="descending">
@@ -865,9 +850,6 @@
     const list = panel.querySelector('.chat-timeline-rows');
     const createdSort = panel.querySelector('.chat-timeline-created-sort');
     const createdSortIcon = panel.querySelector('.chat-timeline-created-sort-icon');
-    const newTab = panel.querySelector('.chat-timeline-newtab');
-    const sidebarTime = panel.querySelector('.chat-timeline-sidebar-time');
-    const messageTime = panel.querySelector('.chat-timeline-message-time');
     const projectFilter = panel.querySelector('.chat-timeline-project-filter');
     let sortDirection = 'newest';
 
@@ -877,31 +859,6 @@
       createdSort.setAttribute('aria-sort', sortDirection === 'newest' ? 'descending' : 'ascending');
       const cached = await window.APIHandler.getCachedConversationList();
       renderTimelineRows(list, cached, sortDirection, projectFilter.value);
-    });
-    newTab.addEventListener('change', async () => {
-      S.settings.openInBackground = newTab.checked;
-      chrome.storage.local.set({ openInBackground: S.settings.openInBackground });
-      const cached = await window.APIHandler.getCachedConversationList();
-      renderTimelineRows(list, cached, sortDirection, projectFilter.value);
-    });
-    sidebarTime.addEventListener('change', async () => {
-      S.settings.showSidebarTime = sidebarTime.checked;
-      chrome.storage.local.set({ showSidebarTime: S.settings.showSidebarTime });
-      if (S.settings.showSidebarTime) {
-        await reloadTimestampMap(false);
-      } else {
-        removeAllBadges();
-      }
-    });
-    messageTime.addEventListener('change', async () => {
-      S.settings.showMessageTimestamps = messageTime.checked;
-      chrome.storage.local.set({ showMessageTimestamps: S.settings.showMessageTimestamps });
-      setMessageTimestampSourceEnabled(S.settings.showMessageTimestamps);
-      if (S.settings.showMessageTimestamps) {
-        stampMessageTimestamps();
-      } else {
-        removeMessageTimestamps();
-      }
     });
     projectFilter.addEventListener('change', async () => {
       const cached = await window.APIHandler.getCachedConversationList();

@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('toggle');
   const sidebarTimeToggle = document.getElementById('sidebarTimeToggle');
   const messageTimeToggle = document.getElementById('messageTimeToggle');
+  const openInBackgroundToggle = document.getElementById('openInBackgroundToggle');
   const outsideCloseToggle = document.getElementById('outsideCloseToggle');
   const size = document.getElementById('size');
   const refresh = document.getElementById('refresh');
@@ -19,11 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     size.disabled = !on;
   }
 
-  chrome.storage.local.get(['enabled', 'showSidebarTime', 'showMessageTimestamps', 'closeOnOutsideClick', 'fontSize'], values => {
+  chrome.storage.local.get(['enabled', 'showSidebarTime', 'showMessageTimestamps', 'openInBackground', 'closeOnOutsideClick', 'fontSize'], values => {
     setToggle(toggle, values.enabled !== false);
     const showSidebarTime = values.showSidebarTime === true;
     setToggle(sidebarTimeToggle, showSidebarTime);
     setToggle(messageTimeToggle, values.showMessageTimestamps === true);
+    setToggle(openInBackgroundToggle, values.openInBackground !== false);
     setToggle(outsideCloseToggle, values.closeOnOutsideClick !== false);
     setSidebarControlsEnabled(showSidebarTime);
     size.value = values.fontSize || 'small';
@@ -69,6 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const showMessageTimestamps = !messageTimeToggle.classList.contains('active');
     setToggle(messageTimeToggle, showMessageTimestamps);
     chrome.storage.local.set({ showMessageTimestamps });
+  });
+  openInBackgroundToggle.addEventListener('click', () => {
+    const openInBackground = !openInBackgroundToggle.classList.contains('active');
+    setToggle(openInBackgroundToggle, openInBackground);
+    chrome.storage.local.set({ openInBackground });
   });
   outsideCloseToggle.addEventListener('click', () => {
     const closeOnOutsideClick = !outsideCloseToggle.classList.contains('active');

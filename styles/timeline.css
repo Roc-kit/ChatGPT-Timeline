@@ -2,15 +2,15 @@
 
 .chat-timeline-decorated {
   position: relative !important;
-  min-height: 46px !important;
-  padding-bottom: 20px !important;
+  min-height: 55px !important;
+  padding-bottom: 25px !important;
 }
 
 .chat-timeline-holder {
   position: absolute !important;
   left: var(--ct-title-offset, 12px) !important;
   right: 8px !important;
-  bottom: 3px !important;
+  bottom: 2px !important;
   z-index: 2 !important;
   display: flex !important;
   flex-direction: column !important;
@@ -131,79 +131,6 @@
 .chat-timeline-panel[data-horizontal="right"][data-vertical="down"] .chat-timeline-panel-header {
   padding-left: 56px !important;
 }
-
-.chat-timeline-panel-controls {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  flex-wrap: nowrap !important;
-  gap: 10px !important;
-  padding: 9px 10px !important;
-  white-space: nowrap !important;
-}
-
-.chat-timeline-newtab-toggle,
-.chat-timeline-sidebar-toggle,
-.chat-timeline-message-toggle {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  white-space: nowrap !important;
-  font-size: 11px !important;
-  cursor: pointer !important;
-  flex: 0 0 auto !important;
-}
-
-@media (max-width: 520px) {
-  .chat-timeline-panel-controls {
-    gap: 6px !important;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-  }
-
-  .chat-timeline-newtab-toggle,
-  .chat-timeline-sidebar-toggle,
-  .chat-timeline-message-toggle {
-    gap: 4px !important;
-    font-size: 10px !important;
-  }
-}
-
-.chat-timeline-newtab-toggle input,
-.chat-timeline-sidebar-toggle input,
-.chat-timeline-message-toggle input {
-  appearance: none !important;
-  width: 34px !important;
-  height: 18px !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 10px !important;
-  background: #c7c9cc !important;
-  position: relative !important;
-  cursor: pointer !important;
-}
-
-.chat-timeline-newtab-toggle input::after,
-.chat-timeline-sidebar-toggle input::after,
-.chat-timeline-message-toggle input::after {
-  content: '' !important;
-  position: absolute !important;
-  width: 14px !important;
-  height: 14px !important;
-  top: 2px !important;
-  left: 2px !important;
-  border-radius: 50% !important;
-  background: #fff !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,.24) !important;
-  transition: transform .15s ease !important;
-}
-
-.chat-timeline-newtab-toggle input:checked,
-.chat-timeline-sidebar-toggle input:checked,
-.chat-timeline-message-toggle input:checked { background: #10a37f !important; }
-.chat-timeline-newtab-toggle input:checked::after,
-.chat-timeline-sidebar-toggle input:checked::after,
-.chat-timeline-message-toggle input:checked::after { transform: translateX(16px) !important; }
 
 .chat-timeline-message-timestamp {
   display: block !important;
