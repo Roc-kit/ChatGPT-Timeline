@@ -2,6 +2,14 @@
 
 ChatGPT Timeline 是一个用于 ChatGPT Web 的 Chrome 扩展，主要用来更方便地按时间查找历史聊天，并补充 ChatGPT 原生界面没有显示的时间信息。
 
+仓库链接：https://github.com/Roc-kit/ChatGPT-Timeline/tree/main
+
+## 项目背景
+
+Codex 很好用，但是 Plus 的额度根本不够用。后面主要使用 ChatGPT Web + DevSpace，遇到聊天记录查找、搜索不方便的问题，直接让 ChatGPT Web + DevSpace 开发了这个扩展。
+
+开发人员：**ChatGPT Web + DevSpace**
+
 ## 功能
 
 - 悬浮聊天目录：按创建时间查看、排序和打开历史聊天。
