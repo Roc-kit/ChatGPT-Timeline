@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   showMessageTimestamps: false,
   fontSize: 'small',
   openInBackground: true,
+  closeOnOutsideClick: true,
   launcherPosition: { x: 0.94, y: 0.76 },
   panelSize: { width: 580, height: 560 }
 };

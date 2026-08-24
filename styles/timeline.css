@@ -206,8 +206,10 @@
 .chat-timeline-message-toggle input:checked::after { transform: translateX(16px) !important; }
 
 .chat-timeline-message-timestamp {
-  display: inline-block !important;
-  margin: 0 8px 4px 0 !important;
+  display: block !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  margin: 0 0 4px 0 !important;
   color: #6b7280 !important;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace !important;
   font-size: 11px !important;
@@ -216,6 +218,18 @@
   white-space: nowrap !important;
   direction: ltr !important;
   unicode-bidi: isolate !important;
+}
+
+.chat-timeline-message-timestamp-assistant {
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.chat-timeline-message-timestamp-user {
+  align-self: flex-end !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
 }
 
 .chat-timeline-panel-status {

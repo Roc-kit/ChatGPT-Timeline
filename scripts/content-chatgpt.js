@@ -28,6 +28,7 @@
       showMessageTimestamps: false,
       fontSize: 'small',
       openInBackground: true,
+      closeOnOutsideClick: true,
       launcherPosition: { x: 0.94, y: 0.76 },
       panelSize: { width: 580, height: 560 }
     }
@@ -81,11 +82,15 @@
     }
   }
 
-  function createMessageTimestamp(value) {
+  function createMessageTimestamp(value, role = '') {
     const text = formatMessageTime(value);
     if (!text) return null;
     const span = document.createElement('span');
-    span.className = 'chat-timeline-message-timestamp';
+    span.className = [
+      'chat-timeline-message-timestamp',
+      role === 'assistant' ? 'chat-timeline-message-timestamp-assistant' : '',
+      role === 'user' ? 'chat-timeline-message-timestamp-user' : ''
+    ].filter(Boolean).join(' ');
     span.setAttribute('data-ct-message-timestamp', '1');
     span.textContent = text;
     return span;
@@ -98,7 +103,8 @@
       if (messageEl.querySelector(':scope > [data-ct-message-timestamp]')) continue;
       const value = Number(messageEl.getAttribute('data-ct-message-create-time'));
       if (!Number.isFinite(value) || value <= 0) continue;
-      const timestamp = createMessageTimestamp(value);
+      const role = messageEl.getAttribute('data-message-author-role') || '';
+      const timestamp = createMessageTimestamp(value, role);
       if (!timestamp) continue;
       messageEl.insertBefore(timestamp, messageEl.firstChild);
       stamped++;
@@ -249,6 +255,16 @@
       S.launcher.textContent = '☰';
       S.launcher.title = '聊天目录（可拖动）';
     }
+  }
+
+  function setupOutsideClose() {
+    document.addEventListener('pointerdown', event => {
+      if (!S.timeline || !S.settings.closeOnOutsideClick) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (S.timeline.contains(target) || S.launcher?.contains(target)) return;
+      closeTimeline();
+    });
   }
 
   function getLauncherPixelPosition() {
@@ -523,18 +539,38 @@
     return rec.projectId || '__regular__';
   }
 
+  function conversationSourceType(rec) {
+    if (!rec.projectId) return 'regular';
+    return String(rec.projectId).startsWith('g-p-') ? 'project' : 'gpt';
+  }
+
+  function conversationSourceName(rec) {
+    const type = conversationSourceType(rec);
+    if (type === 'regular') return '—';
+    if (rec.projectName) return rec.projectName;
+    return type === 'gpt' ? 'GPT' : '未命名项目';
+  }
+
   function populateProjectFilter(select, records) {
     const selected = select.value || '__all__';
     const projects = new Map();
     let hasRegular = false;
     for (const rec of records) {
-      if (rec.projectId) projects.set(rec.projectId, rec.projectName || rec.projectId);
+      if (rec.projectId) {
+        const type = conversationSourceType(rec);
+        const name = conversationSourceName(rec);
+        projects.set(rec.projectId, {
+          type,
+          name,
+          label: type === 'gpt' ? `GPT · ${name}` : `项目 · ${name}`
+        });
+      }
       else hasRegular = true;
     }
     select.replaceChildren();
     const all = document.createElement('option');
     all.value = '__all__';
-    all.textContent = '项目名称 · 全部';
+    all.textContent = '来源 · 全部';
     select.appendChild(all);
     if (hasRegular) {
       const regular = document.createElement('option');
@@ -543,11 +579,11 @@
       select.appendChild(regular);
     }
     [...projects.entries()]
-      .sort((a, b) => a[1].localeCompare(b[1], 'zh-CN'))
-      .forEach(([id, name]) => {
+      .sort((a, b) => a[1].label.localeCompare(b[1].label, 'zh-CN'))
+      .forEach(([id, source]) => {
         const option = document.createElement('option');
         option.value = id;
-        option.textContent = name;
+        option.textContent = source.label;
         select.appendChild(option);
     });
     select.value = [...select.options].some(option => option.value === selected) ? selected : '__all__';
@@ -583,7 +619,7 @@
 
       const project = document.createElement('span');
       project.className = 'chat-timeline-row-project';
-      project.textContent = rec.projectName || '—';
+      project.textContent = conversationSourceName(rec);
 
       const exportCell = document.createElement('span');
       exportCell.className = 'chat-timeline-row-export';
@@ -944,7 +980,7 @@
   async function loadSettings() {
     const values = await new Promise(resolve => {
       chrome.storage.local.get(
-        ['enabled', 'showSidebarTime', 'showMessageTimestamps', 'fontSize', 'openInBackground', 'launcherPosition', 'panelSize'],
+        ['enabled', 'showSidebarTime', 'showMessageTimestamps', 'fontSize', 'openInBackground', 'closeOnOutsideClick', 'launcherPosition', 'panelSize'],
         data => resolve(data || {})
       );
     });
@@ -953,6 +989,7 @@
     if (values.showMessageTimestamps !== undefined) S.settings.showMessageTimestamps = values.showMessageTimestamps;
     if (values.fontSize) S.settings.fontSize = values.fontSize;
     if (values.openInBackground !== undefined) S.settings.openInBackground = values.openInBackground;
+    if (values.closeOnOutsideClick !== undefined) S.settings.closeOnOutsideClick = values.closeOnOutsideClick;
     if (values.launcherPosition?.x != null && values.launcherPosition?.y != null) {
       S.settings.launcherPosition = values.launcherPosition;
     }
@@ -971,15 +1008,24 @@
         return true;
       }
       if (msg.action === 'getStatus') {
-        respond({
+        (async () => {
+          const cached = await window.APIHandler.getCachedConversationList();
+          respond({
+            platform: 'chatgpt',
+            initialized: S.ready,
+            directoryCount: cached.length,
+            badgeCount: document.querySelectorAll('[data-chat-timeline]').length,
+            enabled: S.settings.enabled,
+            apiLoaded: S.apiLoaded,
+            apiSize: S.apiData.size
+          });
+        })().catch(() => respond({
           platform: 'chatgpt',
           initialized: S.ready,
-          badgeCount: document.querySelectorAll('[data-chat-timeline]').length,
-          enabled: S.settings.enabled,
-          apiLoaded: S.apiLoaded,
-          apiSize: S.apiData.size
-        });
-        return false;
+          directoryCount: 0,
+          enabled: S.settings.enabled
+        }));
+        return true;
       }
       if (msg.action === 'openTimeline') {
         openTimeline().then(() => respond({ success: true }));
@@ -1023,6 +1069,7 @@
         }
       }
       if (changes.openInBackground) S.settings.openInBackground = changes.openInBackground.newValue;
+      if (changes.closeOnOutsideClick) S.settings.closeOnOutsideClick = changes.closeOnOutsideClick.newValue;
       if (changes.panelSize?.newValue) S.settings.panelSize = changes.panelSize.newValue;
       if (restamp && S.settings.enabled) {
         removeAllBadges();
@@ -1036,6 +1083,7 @@
     if (!S.settings.enabled) { S.ready = true; return; }
     setMessageTimestampSourceEnabled(S.settings.showMessageTimestamps);
     ensureFloatingButton();
+    setupOutsideClose();
     setupObserver();
     if (S.settings.showSidebarTime) {
       try {

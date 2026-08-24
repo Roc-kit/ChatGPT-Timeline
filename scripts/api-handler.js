@@ -109,6 +109,30 @@ const APIHandler = (function () {
       || '未命名项目';
   }
 
+  function isProjectGizmoId(id) {
+    return typeof id === 'string' && id.startsWith('g-p-');
+  }
+
+  function isCustomGptId(id) {
+    return typeof id === 'string' && id.startsWith('g-') && !isProjectGizmoId(id);
+  }
+
+  function gizmoMetadata(data, fallbackId) {
+    const gizmo = data?.gizmo?.gizmo ?? data?.gizmo ?? data;
+    const id = String(gizmo?.id || fallbackId || '');
+    if (!id) return null;
+    return {
+      id,
+      shortUrl: String(gizmo?.short_url || id),
+      name: String(gizmo?.display?.name || gizmo?.name || '').trim()
+    };
+  }
+
+  async function fetchCustomGptMetadata(token, gizmoId) {
+    const data = await fetchAuthedJson(token, `${baseUrl()}/gizmos/${encodeURIComponent(gizmoId)}`);
+    return gizmoMetadata(data, gizmoId);
+  }
+
   function recordFromItem(item, project = null) {
     const id = item?.id;
     if (!id) return null;
@@ -304,6 +328,34 @@ const APIHandler = (function () {
         try {
           const regular = await fetchRegularIncremental(token, cachedMap, forceFull);
           for (const rec of regular) resultMap.set(rec.id, rec);
+
+          // /conversations exposes custom GPT conversations through gizmo_id,
+          // but does not include the GPT display name. Resolve each distinct GPT
+          // once and reuse that metadata for every matching conversation.
+          const gptIds = new Set();
+          for (const rec of regular) {
+            if (isCustomGptId(rec.projectId)) gptIds.add(rec.projectId);
+          }
+          for (const rec of resultMap.values()) {
+            if (isCustomGptId(rec.projectId) && !rec.projectName) gptIds.add(rec.projectId);
+          }
+          for (const gizmoId of gptIds) {
+            try {
+              const metadata = await fetchCustomGptMetadata(token, gizmoId);
+              if (!metadata) continue;
+              for (const [id, rec] of resultMap) {
+                if (rec.projectId !== gizmoId) continue;
+                resultMap.set(id, {
+                  ...rec,
+                  projectName: metadata.name || rec.projectName || 'GPT',
+                  href: `/g/${metadata.shortUrl || gizmoId}/c/${id}`
+                });
+              }
+            } catch (e) {
+              console.warn(`[ChatGPT Timeline] GPT ${gizmoId} metadata skipped:`, e.message);
+            }
+            await sleep(CFG.INTER_PAGE_MS);
+          }
 
           const projects = await fetchProjects(token);
           for (const project of projects) {

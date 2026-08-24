@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('toggle');
   const sidebarTimeToggle = document.getElementById('sidebarTimeToggle');
   const messageTimeToggle = document.getElementById('messageTimeToggle');
+  const outsideCloseToggle = document.getElementById('outsideCloseToggle');
   const size = document.getElementById('size');
   const refresh = document.getElementById('refresh');
   const refreshText = document.getElementById('refreshText');
@@ -18,11 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
     size.disabled = !on;
   }
 
-  chrome.storage.local.get(['enabled', 'showSidebarTime', 'showMessageTimestamps', 'fontSize'], values => {
+  chrome.storage.local.get(['enabled', 'showSidebarTime', 'showMessageTimestamps', 'closeOnOutsideClick', 'fontSize'], values => {
     setToggle(toggle, values.enabled !== false);
     const showSidebarTime = values.showSidebarTime === true;
     setToggle(sidebarTimeToggle, showSidebarTime);
     setToggle(messageTimeToggle, values.showMessageTimestamps === true);
+    setToggle(outsideCloseToggle, values.closeOnOutsideClick !== false);
     setSidebarControlsEnabled(showSidebarTime);
     size.value = values.fontSize || 'small';
   });
@@ -46,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
           setStatus(false, '扩展尚未就绪');
           return;
         }
-        count.textContent = response.badgeCount ?? 0;
-        setStatus(Boolean(response.apiLoaded), response.apiLoaded ? '本地时间线已就绪' : '正在加载时间线');
+        count.textContent = response.directoryCount ?? 0;
+        setStatus(Boolean(response.initialized), response.initialized ? '扩展已就绪' : '正在初始化');
       });
     });
   }
@@ -67,6 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const showMessageTimestamps = !messageTimeToggle.classList.contains('active');
     setToggle(messageTimeToggle, showMessageTimestamps);
     chrome.storage.local.set({ showMessageTimestamps });
+  });
+  outsideCloseToggle.addEventListener('click', () => {
+    const closeOnOutsideClick = !outsideCloseToggle.classList.contains('active');
+    setToggle(outsideCloseToggle, closeOnOutsideClick);
+    chrome.storage.local.set({ closeOnOutsideClick });
   });
   size.addEventListener('change', () => chrome.storage.local.set({ fontSize: size.value }));
 
