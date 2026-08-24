@@ -212,33 +212,41 @@
     return map;
   }
 
+  function applySyncedConversationRecords(records, statusText = '已完成后台增量同步') {
+    S.apiData = new Map();
+    for (const rec of records) {
+      S.apiData.set(rec.id, rec);
+      if (rec.id?.length > 8) S.apiData.set(rec.id.slice(0, 8), rec);
+    }
+    S.apiLoaded = true;
+
+    if (S.settings.showSidebarTime) {
+      removeAllBadges();
+      stampAll();
+    }
+
+    if (S.timeline?.isConnected) {
+      const list = S.timeline.querySelector('.chat-timeline-rows');
+      const projectFilter = S.timeline.querySelector('.chat-timeline-project-filter');
+      const createdSort = S.timeline.querySelector('.chat-timeline-created-sort');
+      const status = S.timeline.querySelector('.chat-timeline-panel-status');
+      const direction = createdSort?.getAttribute('aria-sort') === 'ascending' ? 'oldest' : 'newest';
+      if (projectFilter) populateProjectFilter(projectFilter, records);
+      if (list && projectFilter) renderTimelineRows(list, records, direction, projectFilter.value);
+      if (status) status.textContent = `${records.length} 条 · ${statusText}`;
+    }
+  }
+
+  async function incrementalSyncConversationList(statusText = '已完成增量同步') {
+    const records = await window.APIHandler.syncConversationList(false);
+    applySyncedConversationRecords(records, statusText);
+    return records;
+  }
+
   async function backgroundSyncConversationList() {
     if (!S.settings.enabled || document.hidden) return;
     try {
-      const records = await window.APIHandler.syncConversationList(false);
-
-      S.apiData = new Map();
-      for (const rec of records) {
-        S.apiData.set(rec.id, rec);
-        if (rec.id?.length > 8) S.apiData.set(rec.id.slice(0, 8), rec);
-      }
-      S.apiLoaded = true;
-
-      if (S.settings.showSidebarTime) {
-        removeAllBadges();
-        stampAll();
-      }
-
-      if (S.timeline?.isConnected) {
-        const list = S.timeline.querySelector('.chat-timeline-rows');
-        const projectFilter = S.timeline.querySelector('.chat-timeline-project-filter');
-        const createdSort = S.timeline.querySelector('.chat-timeline-created-sort');
-        const status = S.timeline.querySelector('.chat-timeline-panel-status');
-        const direction = createdSort?.getAttribute('aria-sort') === 'ascending' ? 'oldest' : 'newest';
-        if (projectFilter) populateProjectFilter(projectFilter, records);
-        if (list && projectFilter) renderTimelineRows(list, records, direction, projectFilter.value);
-        if (status) status.textContent = `${records.length} 条 · 已完成后台增量同步`;
-      }
+      await incrementalSyncConversationList('已完成后台增量同步');
     } catch (error) {
       log('Background sync failed:', error.message);
     }
@@ -986,6 +994,12 @@
       }
       if (msg.action === 'openTimeline') {
         openTimeline().then(() => respond({ success: true }));
+        return true;
+      }
+      if (msg.action === 'incrementalSync') {
+        incrementalSyncConversationList('已完成增量同步')
+          .then(records => respond({ success: true, count: records.length }))
+          .catch(error => respond({ success: false, error: error.message }));
         return true;
       }
       return false;

@@ -56,6 +56,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function syncOnPopupOpen() {
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      const tab = tabs[0];
+      if (!tab?.id || !tab.url?.includes('chatgpt.com')) return;
+      chrome.tabs.sendMessage(tab.id, { action: 'incrementalSync' }, response => {
+        if (chrome.runtime.lastError || !response?.success) return;
+        count.textContent = response.count ?? count.textContent;
+      });
+    });
+  }
+
   toggle.addEventListener('click', () => {
     const enabled = !toggle.classList.contains('active');
     setToggle(toggle, enabled);
@@ -104,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshText.textContent = '完整刷新 / 重建缓存';
   }
 
+  syncOnPopupOpen();
   pollStatus();
   setInterval(pollStatus, 3000);
 });
