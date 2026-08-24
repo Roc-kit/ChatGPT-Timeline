@@ -4,7 +4,9 @@
   "version": "2.5.0",
   "description": "ChatGPT 聊天时间线：支持创建时间、侧边栏时间、消息时间戳、筛选和本地缓存。",
 
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage"],
+
+  "homepage_url": "https://github.com/Roc-kit/ChatGPT-Timeline",
 
   "host_permissions": [
     "https://chatgpt.com/*"

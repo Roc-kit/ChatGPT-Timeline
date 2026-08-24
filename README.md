@@ -41,8 +41,11 @@ Codex 很好用，但是 Plus 的额度根本不够用。后面主要使用 Chat
 ## 权限
 
 - `storage`：保存扩展设置、悬浮按钮位置和本地聊天目录缓存。
-- `activeTab`：让扩展设置与当前 ChatGPT 标签页通信。
 - `https://chatgpt.com/*`：在 ChatGPT 页面读取当前登录账户可见的聊天元数据并显示相关功能。
+
+## 隐私
+
+隐私政策见 [PRIVACY.md](./PRIVACY.md)。
 
 
 ## 访问频率
