@@ -173,12 +173,69 @@
   text-overflow: ellipsis !important;
 }
 
+.chat-timeline-batch-actions {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+.chat-timeline-batch-actions[hidden] {
+  display: none !important;
+}
+
+.chat-timeline-batch-count {
+  color: #6b7280 !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
+
+.chat-timeline-batch-actions button {
+  height: 26px !important;
+  padding: 0 8px !important;
+  border: 1px solid rgba(127, 127, 127, 0.28) !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: inherit !important;
+  font: inherit !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+
+.chat-timeline-batch-actions button:hover:not(:disabled) {
+  border-color: rgba(16, 163, 127, 0.35) !important;
+  color: #0d9373 !important;
+}
+
+.chat-timeline-batch-actions button:disabled {
+  opacity: 0.55 !important;
+  cursor: default !important;
+}
+
 .chat-timeline-columns,
 .chat-timeline-row {
   display: grid !important;
-  grid-template-columns: 168px minmax(0, 1fr) 108px 46px !important;
+  grid-template-columns: 30px 156px minmax(0, 1fr) 100px 76px !important;
   gap: 6px !important;
   align-items: center !important;
+}
+
+.chat-timeline-select-all,
+.chat-timeline-row-select {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.chat-timeline-select-all input,
+.chat-timeline-row-checkbox {
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+  accent-color: #10a37f !important;
+  cursor: pointer !important;
 }
 
 .chat-timeline-export-column-title,
@@ -190,12 +247,13 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  gap: 3px !important;
 }
 
 .chat-timeline-export-button {
-  min-width: 34px !important;
+  min-width: 32px !important;
   height: 24px !important;
-  padding: 0 7px !important;
+  padding: 0 5px !important;
   border: 1px solid rgba(127, 127, 127, 0.28) !important;
   border-radius: 6px !important;
   background: #fff !important;
@@ -299,7 +357,7 @@
 
 .chat-timeline-panel.chat-timeline-compact .chat-timeline-columns,
 .chat-timeline-panel.chat-timeline-compact .chat-timeline-row {
-  grid-template-columns: 168px minmax(0, 1fr) 46px !important;
+  grid-template-columns: 30px 150px minmax(0, 1fr) 76px !important;
 }
 
 .chat-timeline-panel.chat-timeline-compact .chat-timeline-project-filter,

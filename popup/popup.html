@@ -6,14 +6,14 @@
   <title>ChatGPT Timeline</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; width: 320px; font: 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#1f2937; background:#fff; }
+    body { margin: 0; width: 340px; font: 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#1f2937; background:#fff; }
     .header { padding:16px 18px; background:#202123; color:#fff; }
     .header strong { font-size:16px; }
     .header small { display:block; margin-top:4px; color:#c7c9cc; }
     .section { padding:13px 16px; border-bottom:1px solid #e5e7eb; }
     .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .label { margin-bottom:7px; font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; }
-    select,button { width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:7px; background:inherit; color:inherit; }
+    select,button,input { width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:7px; background:inherit; color:inherit; font:inherit; }
     button { cursor:pointer; font-weight:600; }
     button:disabled { opacity:.55; cursor:default; }
     .toggle { width:42px; height:23px; border-radius:13px; background:#d1d5db; position:relative; cursor:pointer; flex:none; }
@@ -26,17 +26,22 @@
     .api-status.ok { color:#0d9373; }
     .api-status.err { color:#b45309; }
     .hint { margin-top:7px; font-size:11px; line-height:1.45; color:#6b7280; }
+    .template-custom { margin-top:8px; }
+    .template-preview { margin-top:8px; padding:8px 10px; border-radius:7px; background:#f8fafc; color:#475569; font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
+    .template-preview strong { color:#1f2937; font-weight:600; }
     @media (prefers-color-scheme: dark) {
       body { background:#202123; color:#f3f4f6; }
       .section { border-color:#374151; }
       .status { background:#2a2b2f; }
-      select,button { border-color:#4b5563; }
+      select,button,input { border-color:#4b5563; }
+      .template-preview { background:#2a2b2f; color:#cbd5e1; }
+      .template-preview strong { color:#f3f4f6; }
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <strong>ChatGPT Timeline&nbsp;&nbsp;v2.5.0</strong>
+    <strong>ChatGPT Timeline&nbsp;&nbsp;v2.6.0</strong>
   </div>
   <div class="section row">
     <span>启用扩展</span>
@@ -70,6 +75,21 @@
       <option value="large">大</option>
     </select>
     <div class="hint">侧边栏格式：2026-08-24 10:05 D1（D1=周一，D7=周日）。消息时间戳格式：2026-08-24 09:46:21。</div>
+  </div>
+  <div class="section">
+    <div class="label">导出文件名</div>
+    <select id="filenamePreset">
+      <option value="title">对话标题</option>
+      <option value="date_title">日期 + 对话标题</option>
+      <option value="source_title">来源 + 对话标题</option>
+      <option value="date_source_title">日期 + 来源 + 对话标题</option>
+      <option value="custom">自定义模板</option>
+    </select>
+    <div class="template-custom" id="customTemplateWrap" hidden>
+      <input id="filenameTemplate" type="text" spellcheck="false" placeholder="{created_date}_{title}">
+    </div>
+    <div class="template-preview"><strong>示例：</strong><span id="filenamePreview"></span></div>
+    <div class="hint">自定义可用：{title}、{created_date}、{updated_date}、{source}、{conversation_id}。Markdown 和 JSON 共用此规则。</div>
   </div>
   <div class="section">
     <button id="refresh"><span id="refreshText">完整刷新 / 重建缓存</span></button>

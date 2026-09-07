@@ -29,6 +29,7 @@
       fontSize: 'small',
       openInBackground: true,
       closeOnOutsideClick: true,
+      exportFilenameTemplate: '{title}',
       launcherPosition: { x: 0.94, y: 0.76 },
       panelSize: { width: 580, height: 560 }
     }
@@ -597,12 +598,16 @@
     select.value = [...select.options].some(option => option.value === selected) ? selected : '__all__';
   }
 
-  function renderTimelineRows(container, records, direction = 'newest', projectFilter = '__all__') {
+  function visibleTimelineRecords(records, direction = 'newest', projectFilter = '__all__') {
     const factor = direction === 'oldest' ? 1 : -1;
     const filtered = projectFilter === '__all__'
       ? records
       : records.filter(rec => projectFilterKey(rec) === projectFilter);
-    const sorted = [...filtered].sort((a, b) => factor * (timestampValue(a.createTime) - timestampValue(b.createTime)));
+    return [...filtered].sort((a, b) => factor * (timestampValue(a.createTime) - timestampValue(b.createTime)));
+  }
+
+  function renderTimelineRows(container, records, direction = 'newest', projectFilter = '__all__', selection = null) {
+    const sorted = visibleTimelineRecords(records, direction, projectFilter);
 
     container.replaceChildren();
     for (const rec of sorted) {
@@ -615,6 +620,27 @@
         event.preventDefault();
         chrome.runtime.sendMessage({ action: 'openInBackground', url: row.href });
       });
+
+      const selectCell = document.createElement('span');
+      selectCell.className = 'chat-timeline-row-select';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'chat-timeline-row-checkbox';
+      checkbox.checked = Boolean(selection?.ids?.has(rec.id));
+      checkbox.setAttribute('aria-label', `选择 ${rec.title}`);
+      checkbox.addEventListener('click', event => event.stopPropagation());
+      checkbox.addEventListener('change', event => {
+        event.stopPropagation();
+        if (!selection?.ids) return;
+        if (checkbox.checked) selection.ids.add(rec.id);
+        else selection.ids.delete(rec.id);
+        selection.onChange?.(sorted);
+      });
+      selectCell.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      selectCell.appendChild(checkbox);
 
       const date = document.createElement('span');
       date.className = 'chat-timeline-row-date';
@@ -631,43 +657,54 @@
       const exportCell = document.createElement('span');
       exportCell.className = 'chat-timeline-row-export';
 
-      const exportButton = document.createElement('button');
-      exportButton.type = 'button';
-      exportButton.className = 'chat-timeline-export-button';
-      exportButton.textContent = 'MD';
-      exportButton.title = '导出该聊天为 Markdown';
-      exportButton.setAttribute('aria-label', `导出 ${rec.title} 为 Markdown`);
-      exportButton.addEventListener('click', async event => {
+      const createExportButton = (label, titleText, action) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chat-timeline-export-button';
+        button.textContent = label;
+        button.title = titleText;
+        button.setAttribute('aria-label', `${titleText}：${rec.title}`);
+        button.addEventListener('click', async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (button.disabled) return;
+          const oldText = button.textContent;
+          button.disabled = true;
+          button.textContent = '…';
+          try {
+            await action(rec);
+            button.textContent = '✓';
+            window.setTimeout(() => {
+              if (button.isConnected) button.textContent = oldText;
+            }, 900);
+          } catch (error) {
+            button.textContent = '!';
+            button.title = `导出失败：${error.message}`;
+            window.setTimeout(() => {
+              if (button.isConnected) {
+                button.textContent = oldText;
+                button.title = titleText;
+              }
+            }, 1600);
+          } finally {
+            button.disabled = false;
+          }
+        });
+        return button;
+      };
+
+      const mdButton = createExportButton('MD', '导出该聊天为 Markdown', exportConversationMarkdown);
+      const jsonButton = createExportButton('JSON', '导出该聊天原始 JSON', exportConversationJson);
+      exportCell.addEventListener('click', event => {
         event.preventDefault();
         event.stopPropagation();
-        if (exportButton.disabled) return;
-        const oldText = exportButton.textContent;
-        exportButton.disabled = true;
-        exportButton.textContent = '…';
-        try {
-          await exportConversationMarkdown(rec);
-          exportButton.textContent = '✓';
-          window.setTimeout(() => {
-            if (exportButton.isConnected) exportButton.textContent = oldText;
-          }, 900);
-        } catch (error) {
-          exportButton.textContent = '!';
-          exportButton.title = `导出失败：${error.message}`;
-          window.setTimeout(() => {
-            if (exportButton.isConnected) {
-              exportButton.textContent = oldText;
-              exportButton.title = '导出该聊天为 Markdown';
-            }
-          }, 1600);
-        } finally {
-          exportButton.disabled = false;
-        }
       });
-      exportCell.appendChild(exportButton);
+      exportCell.append(mdButton, jsonButton);
 
-      row.append(date, title, project, exportCell);
+      row.append(selectCell, date, title, project, exportCell);
       container.appendChild(row);
     }
+    return sorted;
   }
 
   function currentBranchMessages(data) {
@@ -783,8 +820,53 @@
     return (cleaned || 'ChatGPT 聊天记录').slice(0, 120);
   }
 
-  function buildConversationMarkdown(data, fallbackTitle) {
-    const title = data?.title || fallbackTitle || 'ChatGPT 聊天记录';
+  function filenameDate(value) {
+    const ms = timestampValue(value);
+    if (!ms) return '';
+    const d = new Date(ms);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function filenameSource(rec) {
+    return conversationSourceType(rec) === 'regular' ? '普通聊天' : conversationSourceName(rec);
+  }
+
+  function exportBaseFilename(rec, data) {
+    const values = {
+      title: data?.title || rec?.title || 'ChatGPT 聊天记录',
+      created_date: filenameDate(rec?.createTime ?? data?.create_time ?? data?.created_at),
+      updated_date: filenameDate(rec?.updateTime ?? data?.update_time ?? data?.updated_at),
+      source: filenameSource(rec || {}),
+      conversation_id: rec?.id || data?.id || data?.conversation_id || ''
+    };
+    const template = String(S.settings.exportFilenameTemplate || '{title}');
+    const rendered = template.replace(/\{(title|created_date|updated_date|source|conversation_id)\}/g, (_, key) => values[key] || '');
+    return sanitizeFilename(rendered.replace(/_+/g, '_').replace(/^[_\s]+|[_\s]+$/g, '') || values.title);
+  }
+
+  function yamlString(value) {
+    return JSON.stringify(String(value ?? ''));
+  }
+
+  function isoTimestamp(value) {
+    const ms = timestampValue(value);
+    return ms ? new Date(ms).toISOString() : '';
+  }
+
+  function conversationUrl(rec, data) {
+    const id = rec?.id || data?.id || data?.conversation_id;
+    const href = rec?.href || (id ? `/c/${id}` : '');
+    if (!href) return '';
+    try {
+      return new URL(href, location.origin).href;
+    } catch {
+      return href;
+    }
+  }
+
+  function buildConversationMarkdown(data, rec = {}) {
+    const title = data?.title || rec.title || 'ChatGPT 聊天记录';
     const messages = currentBranchMessages(data)
       .filter(message => ['user', 'assistant'].includes(message?.author?.role))
       .map(message => ({
@@ -797,12 +879,50 @@
 
     if (!messages.length) throw new Error('没有找到可导出的用户/助手消息');
 
+    const id = rec.id || data?.id || data?.conversation_id || '';
+    const sourceUrl = conversationUrl(rec, data);
+    const createdAt = isoTimestamp(rec.createTime ?? data?.create_time ?? data?.created_at);
+    const updatedAt = isoTimestamp(rec.updateTime ?? data?.update_time ?? data?.updated_at);
+    const sourceType = conversationSourceType(rec);
+    const sourceName = sourceType === 'regular' ? '' : conversationSourceName(rec);
+    const metadata = [
+      '---',
+      `title: ${yamlString(title)}`,
+      sourceUrl ? `source: ${yamlString(sourceUrl)}` : '',
+      id ? `conversation_id: ${yamlString(id)}` : '',
+      createdAt ? `created_at: ${yamlString(createdAt)}` : '',
+      updatedAt ? `updated_at: ${yamlString(updatedAt)}` : '',
+      `exported_at: ${yamlString(new Date().toISOString())}`,
+      `message_count: ${messages.length}`,
+      'export_scope: "current_branch"',
+      `source_type: ${yamlString(sourceType)}`,
+      sourceName ? `source_name: ${yamlString(sourceName)}` : '',
+      '---'
+    ].filter(Boolean).join('\n');
+
     const body = messages.map(item => `## ${roleHeading(item.role)}\n\n${item.text}`).join('\n\n---\n\n');
-    return `# ${title}\n\n${body}\n`;
+    return `${metadata}\n\n# ${title}\n\n${body}\n`;
   }
 
-  function downloadTextFile(filename, text) {
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  function buildConversationJson(data, rec = {}) {
+    const sourceType = conversationSourceType(rec);
+    const payload = {
+      timeline: {
+        title: data?.title || rec.title || 'ChatGPT 聊天记录',
+        source: conversationUrl(rec, data),
+        conversation_id: rec.id || data?.id || data?.conversation_id || '',
+        created_at: isoTimestamp(rec.createTime ?? data?.create_time ?? data?.created_at),
+        updated_at: isoTimestamp(rec.updateTime ?? data?.update_time ?? data?.updated_at),
+        exported_at: new Date().toISOString(),
+        source_type: sourceType,
+        source_name: sourceType === 'regular' ? '' : conversationSourceName(rec)
+      },
+      conversation: data
+    };
+    return `${JSON.stringify(payload, null, 2)}\n`;
+  }
+
+  function downloadBlobFile(filename, blob) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -814,11 +934,155 @@
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function downloadTextFile(filename, text, type = 'text/plain;charset=utf-8') {
+    downloadBlobFile(filename, new Blob([text], { type }));
+  }
+
+  function crc32(bytes) {
+    const table = crc32.table || (crc32.table = Array.from({ length: 256 }, (_, value) => {
+      let entry = value;
+      for (let bit = 0; bit < 8; bit++) entry = (entry >>> 1) ^ (0xedb88320 & -(entry & 1));
+      return entry >>> 0;
+    }));
+    let crc = 0xffffffff;
+    for (const byte of bytes) crc = (crc >>> 8) ^ table[(crc ^ byte) & 0xff];
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function pushU16(target, value) {
+    target.push(value & 0xff, (value >>> 8) & 0xff);
+  }
+
+  function pushU32(target, value) {
+    target.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+  }
+
+  function dosDateTime(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    return {
+      time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+      date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+    };
+  }
+
+  function buildStoredZip(files) {
+    const encoder = new TextEncoder();
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+    const stamp = dosDateTime();
+
+    for (const file of files) {
+      const name = encoder.encode(file.name);
+      const data = typeof file.text === 'string' ? encoder.encode(file.text) : file.data;
+      const crc = crc32(data);
+      const local = [];
+      pushU32(local, 0x04034b50);
+      pushU16(local, 20);
+      pushU16(local, 0x0800);
+      pushU16(local, 0);
+      pushU16(local, stamp.time);
+      pushU16(local, stamp.date);
+      pushU32(local, crc);
+      pushU32(local, data.length);
+      pushU32(local, data.length);
+      pushU16(local, name.length);
+      pushU16(local, 0);
+      const localHeader = Uint8Array.from(local);
+      localParts.push(localHeader, name, data);
+
+      const central = [];
+      pushU32(central, 0x02014b50);
+      pushU16(central, 20);
+      pushU16(central, 20);
+      pushU16(central, 0x0800);
+      pushU16(central, 0);
+      pushU16(central, stamp.time);
+      pushU16(central, stamp.date);
+      pushU32(central, crc);
+      pushU32(central, data.length);
+      pushU32(central, data.length);
+      pushU16(central, name.length);
+      pushU16(central, 0);
+      pushU16(central, 0);
+      pushU16(central, 0);
+      pushU16(central, 0);
+      pushU32(central, 0);
+      pushU32(central, offset);
+      centralParts.push(Uint8Array.from(central), name);
+      offset += localHeader.length + name.length + data.length;
+    }
+
+    const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+    const end = [];
+    pushU32(end, 0x06054b50);
+    pushU16(end, 0);
+    pushU16(end, 0);
+    pushU16(end, files.length);
+    pushU16(end, files.length);
+    pushU32(end, centralSize);
+    pushU32(end, offset);
+    pushU16(end, 0);
+    return new Blob([...localParts, ...centralParts, Uint8Array.from(end)], { type: 'application/zip' });
+  }
+
+  function uniqueFilename(filename, used) {
+    if (!used.has(filename)) {
+      used.add(filename);
+      return filename;
+    }
+    const match = filename.match(/^(.*?)(\.[^.]+)?$/);
+    const base = match?.[1] || filename;
+    const ext = match?.[2] || '';
+    let index = 2;
+    let candidate = `${base} (${index})${ext}`;
+    while (used.has(candidate)) candidate = `${base} (${++index})${ext}`;
+    used.add(candidate);
+    return candidate;
+  }
+
   async function exportConversationMarkdown(rec) {
     const data = await window.APIHandler.getConversation(rec.id);
-    const markdown = buildConversationMarkdown(data, rec.title);
-    const title = data?.title || rec.title || 'ChatGPT 聊天记录';
-    downloadTextFile(`${sanitizeFilename(title)}.md`, markdown);
+    const markdown = buildConversationMarkdown(data, rec);
+    downloadTextFile(`${exportBaseFilename(rec, data)}.md`, markdown, 'text/markdown;charset=utf-8');
+  }
+
+  async function exportConversationJson(rec) {
+    const data = await window.APIHandler.getConversation(rec.id);
+    downloadTextFile(`${exportBaseFilename(rec, data)}.json`, buildConversationJson(data, rec), 'application/json;charset=utf-8');
+  }
+
+  async function exportConversationBatch(records, format, onProgress) {
+    const files = [];
+    const used = new Set();
+    const failures = [];
+    for (let index = 0; index < records.length; index++) {
+      onProgress?.(index + 1, records.length);
+      const rec = records[index];
+      try {
+        const data = await window.APIHandler.getConversation(rec.id);
+        const base = exportBaseFilename(rec, data);
+        if (format === 'json') {
+          files.push({ name: uniqueFilename(`${base}.json`, used), text: buildConversationJson(data, rec) });
+        } else {
+          files.push({ name: uniqueFilename(`${base}.md`, used), text: buildConversationMarkdown(data, rec) });
+        }
+      } catch (error) {
+        failures.push(`${rec.title || rec.id} (${rec.id})：${error.message}`);
+      }
+    }
+    if (!files.length) throw new Error(failures[0] || '没有可导出的聊天');
+    if (failures.length) {
+      files.push({
+        name: '导出失败.txt',
+        text: `以下 ${failures.length} 个聊天未能导出：\n\n${failures.join('\n')}\n`
+      });
+    }
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const zipName = `ChatGPT-Timeline_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}_${format.toUpperCase()}.zip`;
+    downloadBlobFile(zipName, buildStoredZip(files));
+    return { successCount: records.length - failures.length, failureCount: failures.length };
   }
 
   async function openTimeline() {
@@ -831,9 +1095,17 @@
       <div class="chat-timeline-panel-header">
         <strong>聊天目录</strong>
         <span class="chat-timeline-panel-status">正在读取本地目录…</span>
+        <div class="chat-timeline-batch-actions" hidden>
+          <span class="chat-timeline-batch-count">已选 0</span>
+          <button type="button" data-batch-format="md">导出 MD</button>
+          <button type="button" data-batch-format="json">导出 JSON</button>
+        </div>
       </div>
       <div class="chat-timeline-panel-list">
         <div class="chat-timeline-columns">
+          <label class="chat-timeline-select-all" title="全选当前筛选结果">
+            <input type="checkbox" aria-label="全选当前筛选结果">
+          </label>
           <button type="button" class="chat-timeline-created-sort" aria-label="按创建时间排序" aria-sort="descending">
             <span>创建时间</span><span class="chat-timeline-created-sort-icon">↓</span>
           </button>
@@ -859,27 +1131,80 @@
     const createdSort = panel.querySelector('.chat-timeline-created-sort');
     const createdSortIcon = panel.querySelector('.chat-timeline-created-sort-icon');
     const projectFilter = panel.querySelector('.chat-timeline-project-filter');
+    const selectAll = panel.querySelector('.chat-timeline-select-all input');
+    const batchActions = panel.querySelector('.chat-timeline-batch-actions');
+    const batchCount = panel.querySelector('.chat-timeline-batch-count');
+    const batchButtons = Array.from(panel.querySelectorAll('[data-batch-format]'));
     let sortDirection = 'newest';
+    let currentRecords = [];
+    const selectedIds = new Set();
+
+    const updateSelectionUi = (visible = visibleTimelineRecords(currentRecords, sortDirection, projectFilter.value)) => {
+      const selectedVisible = visible.filter(rec => selectedIds.has(rec.id)).length;
+      selectAll.disabled = visible.length === 0;
+      selectAll.checked = visible.length > 0 && selectedVisible === visible.length;
+      selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
+      batchActions.hidden = selectedIds.size === 0;
+      batchCount.textContent = `已选 ${selectedIds.size}`;
+    };
+
+    const selection = { ids: selectedIds, onChange: updateSelectionUi };
+    const renderCurrent = () => {
+      const visible = renderTimelineRows(list, currentRecords, sortDirection, projectFilter.value, selection);
+      updateSelectionUi(visible);
+    };
 
     createdSort.addEventListener('click', async () => {
       sortDirection = sortDirection === 'newest' ? 'oldest' : 'newest';
       createdSortIcon.textContent = sortDirection === 'newest' ? '↓' : '↑';
       createdSort.setAttribute('aria-sort', sortDirection === 'newest' ? 'descending' : 'ascending');
-      const cached = await window.APIHandler.getCachedConversationList();
-      renderTimelineRows(list, cached, sortDirection, projectFilter.value);
+      renderCurrent();
     });
-    projectFilter.addEventListener('change', async () => {
-      const cached = await window.APIHandler.getCachedConversationList();
-      renderTimelineRows(list, cached, sortDirection, projectFilter.value);
+    projectFilter.addEventListener('change', () => {
+      selectedIds.clear();
+      renderCurrent();
     });
+    selectAll.addEventListener('change', () => {
+      const visible = visibleTimelineRecords(currentRecords, sortDirection, projectFilter.value);
+      for (const rec of visible) {
+        if (selectAll.checked) selectedIds.add(rec.id);
+        else selectedIds.delete(rec.id);
+      }
+      renderCurrent();
+    });
+    for (const button of batchButtons) {
+      button.addEventListener('click', async () => {
+        if (!selectedIds.size || button.disabled) return;
+        const format = button.dataset.batchFormat === 'json' ? 'json' : 'md';
+        const selected = visibleTimelineRecords(currentRecords, sortDirection, projectFilter.value)
+          .filter(rec => selectedIds.has(rec.id));
+        if (!selected.length) return;
+        batchButtons.forEach(item => { item.disabled = true; });
+        try {
+          const result = await exportConversationBatch(selected, format, (done, total) => {
+            status.textContent = `正在导出 ${done} / ${total}…`;
+          });
+          status.textContent = result.failureCount
+            ? `已导出 ${result.successCount} 个，失败 ${result.failureCount} 个 · ZIP 已生成`
+            : `已导出 ${result.successCount} 个 ${format.toUpperCase()} · ZIP 已生成`;
+          selectedIds.clear();
+          renderCurrent();
+        } catch (error) {
+          status.textContent = `批量导出失败：${error.message}`;
+        } finally {
+          batchButtons.forEach(item => { item.disabled = false; });
+        }
+      });
+    }
 
     requestAnimationFrame(positionTimelinePanel);
 
     try {
       const cached = await window.APIHandler.getCachedConversationList();
+      currentRecords = cached;
       if (cached.length) {
         populateProjectFilter(projectFilter, cached);
-        renderTimelineRows(list, cached, sortDirection, projectFilter.value);
+        renderCurrent();
         status.textContent = `本地已有 ${cached.length} 条，正在增量检查最新数据…`;
         requestAnimationFrame(positionTimelinePanel);
       } else {
@@ -888,8 +1213,9 @@
 
       const fresh = await window.APIHandler.syncConversationList(false);
       if (!S.timeline || S.timeline !== panel) return;
+      currentRecords = fresh;
       populateProjectFilter(projectFilter, fresh);
-      renderTimelineRows(list, fresh, sortDirection, projectFilter.value);
+      renderCurrent();
       status.textContent = `${fresh.length} 条 · 已完成增量同步`;
       requestAnimationFrame(positionTimelinePanel);
       if (S.settings.showSidebarTime) await reloadTimestampMap(false);
@@ -945,7 +1271,7 @@
   async function loadSettings() {
     const values = await new Promise(resolve => {
       chrome.storage.local.get(
-        ['enabled', 'showSidebarTime', 'showMessageTimestamps', 'fontSize', 'openInBackground', 'closeOnOutsideClick', 'launcherPosition', 'panelSize'],
+        ['enabled', 'showSidebarTime', 'showMessageTimestamps', 'fontSize', 'openInBackground', 'closeOnOutsideClick', 'exportFilenameTemplate', 'launcherPosition', 'panelSize'],
         data => resolve(data || {})
       );
     });
@@ -955,6 +1281,7 @@
     if (values.fontSize) S.settings.fontSize = values.fontSize;
     if (values.openInBackground !== undefined) S.settings.openInBackground = values.openInBackground;
     if (values.closeOnOutsideClick !== undefined) S.settings.closeOnOutsideClick = values.closeOnOutsideClick;
+    if (values.exportFilenameTemplate) S.settings.exportFilenameTemplate = values.exportFilenameTemplate;
     if (values.launcherPosition?.x != null && values.launcherPosition?.y != null) {
       S.settings.launcherPosition = values.launcherPosition;
     }
@@ -1041,6 +1368,7 @@
       }
       if (changes.openInBackground) S.settings.openInBackground = changes.openInBackground.newValue;
       if (changes.closeOnOutsideClick) S.settings.closeOnOutsideClick = changes.closeOnOutsideClick.newValue;
+      if (changes.exportFilenameTemplate) S.settings.exportFilenameTemplate = changes.exportFilenameTemplate.newValue || '{title}';
       if (changes.panelSize?.newValue) S.settings.panelSize = changes.panelSize.newValue;
       if (restamp && S.settings.enabled) {
         removeAllBadges();

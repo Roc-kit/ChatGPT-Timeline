@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Timeline",
-  "version": "2.5.0",
-  "description": "ChatGPT 聊天时间线：支持创建时间、侧边栏时间、消息时间戳、筛选和本地缓存。",
+  "version": "2.6.0",
+  "description": "ChatGPT 聊天时间线：支持创建时间、消息时间戳、来源筛选、Markdown/JSON 导出和批量导出。",
 
   "permissions": ["storage"],
 

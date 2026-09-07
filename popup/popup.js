@@ -5,6 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const openInBackgroundToggle = document.getElementById('openInBackgroundToggle');
   const outsideCloseToggle = document.getElementById('outsideCloseToggle');
   const size = document.getElementById('size');
+  const filenamePreset = document.getElementById('filenamePreset');
+  const customTemplateWrap = document.getElementById('customTemplateWrap');
+  const filenameTemplate = document.getElementById('filenameTemplate');
+  const filenamePreview = document.getElementById('filenamePreview');
   const refresh = document.getElementById('refresh');
   const refreshText = document.getElementById('refreshText');
   const count = document.getElementById('count');
@@ -20,7 +24,45 @@ document.addEventListener('DOMContentLoaded', () => {
     size.disabled = !on;
   }
 
-  chrome.storage.local.get(['enabled', 'showSidebarTime', 'showMessageTimestamps', 'openInBackground', 'closeOnOutsideClick', 'fontSize'], values => {
+  const filenamePresets = {
+    title: '{title}',
+    date_title: '{created_date}_{title}',
+    source_title: '{source}_{title}',
+    date_source_title: '{created_date}_{source}_{title}'
+  };
+
+  function presetForTemplate(template) {
+    const match = Object.entries(filenamePresets).find(([, value]) => value === template);
+    return match?.[0] || 'custom';
+  }
+
+  function previewFilename(template) {
+    const sample = {
+      title: 'NocoBase 官方 Demo 分析',
+      created_date: '2026-09-05',
+      updated_date: '2026-09-07',
+      source: 'FlowBase',
+      conversation_id: 'abc123'
+    };
+    const value = String(template || '{title}').replace(/\{(title|created_date|updated_date|source|conversation_id)\}/g, (_, key) => sample[key]);
+    return `${value || sample.title}.md`;
+  }
+
+  function updateFilenameUi(template) {
+    const preset = presetForTemplate(template);
+    filenamePreset.value = preset;
+    customTemplateWrap.hidden = preset !== 'custom';
+    filenameTemplate.value = preset === 'custom' ? template : '';
+    filenamePreview.textContent = previewFilename(template);
+  }
+
+  function saveFilenameTemplate(template) {
+    const value = String(template || '').trim() || '{title}';
+    chrome.storage.local.set({ exportFilenameTemplate: value });
+    filenamePreview.textContent = previewFilename(value);
+  }
+
+  chrome.storage.local.get(['enabled', 'showSidebarTime', 'showMessageTimestamps', 'openInBackground', 'closeOnOutsideClick', 'fontSize', 'exportFilenameTemplate'], values => {
     setToggle(toggle, values.enabled !== false);
     const showSidebarTime = values.showSidebarTime === true;
     setToggle(sidebarTimeToggle, showSidebarTime);
@@ -29,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setToggle(outsideCloseToggle, values.closeOnOutsideClick !== false);
     setSidebarControlsEnabled(showSidebarTime);
     size.value = values.fontSize || 'small';
+    updateFilenameUi(values.exportFilenameTemplate || '{title}');
   });
 
   function setStatus(ok, text) {
@@ -94,6 +137,19 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.set({ closeOnOutsideClick });
   });
   size.addEventListener('change', () => chrome.storage.local.set({ fontSize: size.value }));
+  filenamePreset.addEventListener('change', () => {
+    const preset = filenamePreset.value;
+    customTemplateWrap.hidden = preset !== 'custom';
+    if (preset === 'custom') {
+      const current = filenameTemplate.value.trim() || '{created_date}_{title}';
+      filenameTemplate.value = current;
+      saveFilenameTemplate(current);
+      filenameTemplate.focus();
+      return;
+    }
+    saveFilenameTemplate(filenamePresets[preset] || '{title}');
+  });
+  filenameTemplate.addEventListener('input', () => saveFilenameTemplate(filenameTemplate.value));
 
   refresh.addEventListener('click', () => {
     refresh.disabled = true;
